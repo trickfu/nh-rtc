@@ -1,0 +1,22 @@
+services:
+  # Python Flask Signaling Server
+  - type: web
+    name: webrtc-signaling-server
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn --worker-class geventwebsocket.gunicorn.workers.GeventWebSocketWorker -w 1 app:app
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
+      - key: PYTHON_VERSION
+        value: 3.11.0
+
+  # React Frontend (Static Site)
+  - type: web
+    name: webrtc-frontend
+    runtime: static
+    buildCommand: cd practicewebrtc && npm install && npm run build
+    staticPublishPath: practicewebrtc/build
+    envVars:
+      - key: REACT_APP_SIGNALING_SERVER
+        sync: false
