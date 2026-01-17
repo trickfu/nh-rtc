@@ -11,13 +11,8 @@ function CallScreen() {
   const remoteVideoRef = useRef(null);
   const pcRef = useRef(null); // Use ref to persist peer connection across renders
   const pendingCandidates = useRef([]); // Queue for ICE candidates that arrive early
-
-  // Use REACT_APP_SIGNALING_SERVER env var, or fallback to localhost for development
-  const socketRef = useRef(
-    socketio(process.env.REACT_APP_SIGNALING_SERVER || "http://localhost:9000", {
-      autoConnect: false,
-    })
-  );
+  const socketRef = useRef(null);
+  const isConnectedRef = useRef(false); // Track if we've already connected
 
   const sendData = (data) => {
     socketRef.current.emit("data", {
@@ -38,13 +33,25 @@ function CallScreen() {
   };
 
   const onTrack = (event) => {
-    console.log("Adding remote track", event.streams);
+    console.log("onTrack fired!", event);
+    console.log("Track kind:", event.track.kind);
+    console.log("Streams:", event.streams);
+    console.log("remoteVideoRef.current:", remoteVideoRef.current);
     if (remoteVideoRef.current && event.streams[0]) {
+      console.log("Setting remote video srcObject");
       remoteVideoRef.current.srcObject = event.streams[0];
+    } else {
+      console.warn("Could not set remote video - ref or stream missing");
     }
   };
 
   const createPeerConnection = () => {
+    // Prevent creating duplicate peer connections (React StrictMode calls useEffect twice)
+    if (pcRef.current) {
+      console.log("PeerConnection already exists, skipping creation");
+      return pcRef.current;
+    }
+
     try {
       const pc = new RTCPeerConnection({
         iceServers: [
@@ -65,9 +72,14 @@ function CallScreen() {
 
       const localStream = localVideoRef.current.srcObject;
       if (localStream) {
-        for (const track of localStream.getTracks()) {
+        const tracks = localStream.getTracks();
+        console.log("Adding local tracks to PC:", tracks.length, "tracks");
+        for (const track of tracks) {
+          console.log("Adding track:", track.kind, track.id);
           pc.addTrack(track, localStream);
         }
+      } else {
+        console.warn("No local stream available when creating PC!");
       }
       pcRef.current = pc;
       console.log("PeerConnection created");
@@ -127,7 +139,7 @@ function CallScreen() {
 
   const signalingDataHandler = async (data) => {
     if (data.type === "offer") {
-      createPeerConnection();
+      // Peer connection already created in startConnection
       const pc = pcRef.current;
       if (!pc) return;
 
@@ -172,7 +184,19 @@ function CallScreen() {
   };
 
   useEffect(() => {
-    const socket = socketRef.current;
+    // Skip if already connected (React StrictMode protection)
+    if (isConnectedRef.current) {
+      console.log("Already connected, skipping duplicate mount");
+      return;
+    }
+    isConnectedRef.current = true;
+
+    // Create socket for this connection
+    const socket = socketio(
+      process.env.REACT_APP_SIGNALING_SERVER || "https://webrtc-signallingserver.onrender.com"
+    );
+    socketRef.current = socket;
+
     const localVideo = localVideoRef.current;
     let localStream = null;
 
@@ -189,7 +213,8 @@ function CallScreen() {
           console.log("Local Stream found");
           localStream = stream;
           localVideo.srcObject = stream;
-          socket.connect();
+          // Create peer connection early so tracks are ready before signaling
+          createPeerConnection();
           socket.emit("join", { username: localUsername, room: roomName });
         })
         .catch((error) => {
@@ -199,7 +224,7 @@ function CallScreen() {
 
     const handleReady = () => {
       console.log("Ready to Connect!");
-      createPeerConnection();
+      // Peer connection already created in startConnection, just send offer
       sendOffer();
     };
 
@@ -217,11 +242,14 @@ function CallScreen() {
       socket.off("ready", handleReady);
       socket.off("data", handleData);
       socket.disconnect();
-      pcRef.current?.close();
-      // Stop local media tracks
+      if (pcRef.current) {
+        pcRef.current.close();
+        pcRef.current = null;
+      }
       if (localStream) {
         localStream.getTracks().forEach(track => track.stop());
       }
+      isConnectedRef.current = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [localUsername, roomName]);
