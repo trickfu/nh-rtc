@@ -55,7 +55,8 @@ const Particles = ({ audioStream }) => {
 
             temp.push({
                 t, factor, speed, xFactor, yFactor, zFactor, mx: 0, my: 0,
-                isEmitting, emissionVelocity
+                isEmitting, emissionVelocity,
+                life: 0, vx: 0, vy: 0, vz: 0
             });
         }
         return temp;
@@ -116,6 +117,17 @@ const Particles = ({ audioStream }) => {
         const waveColor2 = new THREE.Color('#ff00ff'); // Magenta
         const white = new THREE.Color('#ffffff');
 
+        // Complex wave functions for randomness
+        // Complex wave functions for randomness
+        const getWave1 = (angle) => {
+            // Smoother waves, lower frequencies
+            return Math.sin(angle * 3 + time * 0.5) + Math.sin(angle * 5 - time * 1.5) * 0.5;
+        };
+        const getWave2 = (angle) => {
+            // Smoother waves, removed high freq spike
+            return Math.cos(angle * 4 + time * 4) + Math.sin(angle * 7 + time) * 0.5 + Math.cos(angle * 13 - time * 2) * 0.2;
+        };
+
         particles.forEach((particle, i) => {
             let { t, factor, speed, xFactor, yFactor, zFactor } = particle;
 
@@ -140,11 +152,12 @@ const Particles = ({ audioStream }) => {
             if (audioStream) {
                 // Audio Active Logic
 
-                // Define 3 Layers
+                // Define 4 Layers
                 // Layer 0: Base Ring (Stable)
                 // Layer 1: Wave Ring 1 (Mid distortion)
                 // Layer 2: Wave Ring 2 (High distortion)
-                const layer = i % 3;
+                // Layer 3: Emission Particles (Explosive)
+                const layer = i % 4;
 
                 const angle = (i / count) * Math.PI * 2 + time * 0.1;
                 const baseRadius = 12;
@@ -156,7 +169,6 @@ const Particles = ({ audioStream }) => {
                     const ringY = Math.sin(angle) * r;
                     const ringZ = 0; // Flat
 
-                    // Updates
                     targetX = ringX;
                     targetY = ringY;
                     targetZ = ringZ;
@@ -167,42 +179,116 @@ const Particles = ({ audioStream }) => {
 
                 } else if (layer === 1) {
                     // --- Wave Ring 1: Medium Distortion (Cyan theme) ---
-                    // Gently floats on top
-                    const w1 = Math.sin(angle * 5 + time * 3) * (intensity * 4);
-                    const r = baseRadius + w1;
+                    // Reduced multiplier for smoother look
+                    const w1 = getWave1(angle) * (intensity * 4);
+                    const breathe = Math.cos(time * 3) * (intensity * 2);
+                    const r = baseRadius + w1 + breathe;
 
                     const ringX = Math.cos(angle) * r;
                     const ringY = Math.sin(angle) * r;
-                    const ringZ = Math.cos(angle * 3 + time) * 2; // Slight depth
+                    const ringZ = Math.cos(angle * 3 + time) * 2;
 
                     targetX = ringX;
                     targetY = ringY;
                     targetZ = ringZ;
 
-                    // Color: Cyan mix
                     tempColor.lerpColors(baseColor2, waveColor1, intensity + 0.3);
 
-                } else {
+                } else if (layer === 2) {
                     // --- Wave Ring 2: High Distortion (Magenta theme) ---
-                    // Spiky, erratic
-                    const w2 = Math.cos(angle * 10 - time * 5) * (intensity * 8);
+                    // Reduced multiplier
+                    const w2 = getWave2(angle) * (intensity * 5); // Kept similar but wave itself is smoother
                     const breathe = Math.sin(time * 5) * (intensity * 2);
                     const r = baseRadius + w2 + breathe;
 
                     const ringX = Math.cos(angle) * r;
                     const ringY = Math.sin(angle) * r;
-                    const ringZ = Math.sin(angle * 8 + time * 2) * (intensity * 5); // More depth
+                    const ringZ = Math.sin(angle * 8 + time * 2) * (intensity * 5);
 
                     targetX = ringX;
                     targetY = ringY;
                     targetZ = ringZ;
 
-                    // Color: Magenta/White hot
                     const spike = Math.abs(w2) / (1 + intensity * 8);
                     if (intensity > 0.1 && spike > 0.5) {
                         tempColor.lerpColors(waveColor2, white, spike);
                     } else {
                         tempColor.lerpColors(baseColor1, waveColor2, intensity);
+                    }
+                } else {
+                    // --- Layer 3: Emitters ---
+                    if (particle.life > 0) {
+                        // Move particle
+                        particle.curX += particle.vx;
+                        particle.curY += particle.vy;
+                        particle.curZ += particle.vz;
+                        particle.life -= 0.015; // Slow decay
+
+                        targetX = particle.curX;
+                        targetY = particle.curY;
+                        targetZ = particle.curZ;
+
+                        // Color fades to white/blue
+                        tempColor.lerpColors(waveColor1, white, particle.life);
+
+                    } else {
+                        // Check if we should spawn
+                        // Reduced global multiplier from 0.8 to 0.6 to lower count slightly
+                        if (intensity > 0.05 && Math.random() < intensity * 0.6) {
+                            particle.life = 1.0;
+
+                            // Randomly choose Source Ring (1 or 2)
+                            const useRing1 = Math.random() > 0.5;
+                            const spawnAngle = Math.random() * Math.PI * 2;
+
+                            // Select wave function and properties based on ring
+                            let rawWave, w, r, z;
+
+                            if (useRing1) {
+                                rawWave = getWave1(spawnAngle);
+                                w = rawWave * (intensity * 4);
+                                const breathe = Math.cos(time * 3) * (intensity * 2);
+                                r = baseRadius + w + breathe;
+                                z = Math.cos(spawnAngle * 3 + time) * 2; // Match Ring 1 Z
+
+                                // Cyan/Blueish tint for these particles
+                                tempColor.lerpColors(baseColor2, waveColor1, 0.8);
+                            } else {
+                                rawWave = getWave2(spawnAngle);
+                                w = rawWave * (intensity * 5);
+                                const breathe = Math.sin(time * 5) * (intensity * 2);
+                                r = baseRadius + w + breathe;
+                                z = Math.sin(spawnAngle * 8 + time * 2) * (intensity * 5); // Match Ring 2 Z
+
+                                // Magenta/White tint
+                                tempColor.set(white);
+                            }
+
+                            // Density Probability Check
+                            const densityProb = (rawWave + 3) / 6;
+
+                            if (Math.random() < densityProb) {
+                                particle.curX = Math.cos(spawnAngle) * r;
+                                particle.curY = Math.sin(spawnAngle) * r;
+                                particle.curZ = z;
+
+                                // Velocity outward from center
+                                const speed = 0.05 + Math.random() * 0.1 * (intensity * 4);
+                                particle.vx = Math.cos(spawnAngle) * speed;
+                                particle.vy = Math.sin(spawnAngle) * speed;
+                                particle.vz = (Math.random() - 0.5) * speed;
+
+                                targetX = particle.curX;
+                                targetY = particle.curY;
+                                targetZ = particle.curZ;
+
+                                // Color is already set in tempColor above for the spawn frame
+                            } else {
+                                targetX = 10000;
+                            }
+                        } else {
+                            targetX = 10000;
+                        }
                     }
                 }
 
@@ -237,9 +323,25 @@ const Particles = ({ audioStream }) => {
             // Scale based on audio
             const baseScale = 0.3; // Increased base scale for glow sprites
             let scaleAdd = intensity * 1.5;
-            if (audioStream && i % 3 === 0) scaleAdd = 0; // Base ring stays small/stable
 
-            dummy.scale.setScalar(baseScale + scaleAdd);
+            if (audioStream) {
+                if (i % 4 === 0) scaleAdd = 0; // Base ring stays small/stable
+                if (i % 4 === 3) {
+                    // Emitter scale logic
+                    if (particle.life > 0) {
+                        scaleAdd = particle.life * 0.5; // Scale down with life
+                    } else {
+                        scaleAdd = -100; // Force scale to 0 (effectively)
+                        // A negative scale here combined with baseScale might not check out if baseScale is small
+                        // Better to set direct scalar
+                    }
+                }
+            }
+
+            let finalScale = baseScale + scaleAdd;
+            if (audioStream && i % 4 === 3 && particle.life <= 0) finalScale = 0;
+
+            dummy.scale.setScalar(finalScale);
 
             // Billboarding: Face camera
             dummy.quaternion.copy(state.camera.quaternion);
