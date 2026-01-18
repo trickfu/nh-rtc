@@ -34,8 +34,12 @@ io.on("connection", (socket) => {
 
     console.log(`${username} joined room: ${room}`);
 
-    // If there are 2 users in the room, tell only the second user to send an offer
+    // If there are 2 users in the room, tell the second user to send an offer
+    // and notify the first user that someone joined (so they're ready to receive)
     if (rooms[room].length === 2) {
+      // Notify first user that a peer is joining
+      socket.to(room).emit("peer-joined");
+      // Tell second user to initiate the offer
       socket.emit("ready");
     }
   });
