@@ -78,6 +78,22 @@ const Particles = ({ audioStream }) => {
         return colors;
     }, [count]);
 
+    // Generate Glow Texture
+    const texture = useMemo(() => {
+        const canvas = document.createElement('canvas');
+        canvas.width = 32;
+        canvas.height = 32;
+        const context = canvas.getContext('2d');
+        const gradient = context.createRadialGradient(16, 16, 0, 16, 16, 16);
+        gradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
+        gradient.addColorStop(0.2, 'rgba(255, 255, 255, 0.8)');
+        gradient.addColorStop(0.5, 'rgba(255, 255, 255, 0.2)');
+        gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+        context.fillStyle = gradient;
+        context.fillRect(0, 0, 32, 32);
+        return new THREE.CanvasTexture(canvas);
+    }, []);
+
     useFrame((state) => {
         if (!mesh.current) return;
 
@@ -148,7 +164,6 @@ const Particles = ({ audioStream }) => {
                     // Color: Stable Gradient
                     const ratio = (Math.sin(angle + time) + 1) / 2;
                     tempColor.lerpColors(baseColor1, baseColor2, ratio);
-                    mesh.current.setColorAt(i, tempColor);
 
                 } else if (layer === 1) {
                     // --- Wave Ring 1: Medium Distortion (Cyan theme) ---
@@ -166,7 +181,6 @@ const Particles = ({ audioStream }) => {
 
                     // Color: Cyan mix
                     tempColor.lerpColors(baseColor2, waveColor1, intensity + 0.3);
-                    mesh.current.setColorAt(i, tempColor);
 
                 } else {
                     // --- Wave Ring 2: High Distortion (Magenta theme) ---
@@ -190,19 +204,7 @@ const Particles = ({ audioStream }) => {
                     } else {
                         tempColor.lerpColors(baseColor1, waveColor2, intensity);
                     }
-                    mesh.current.setColorAt(i, tempColor);
                 }
-
-                // Lerp current to target for smoothness
-                const lerpFactor = 0.1;
-                particle.curX = THREE.MathUtils.lerp(particle.curX, targetX, lerpFactor);
-                particle.curY = THREE.MathUtils.lerp(particle.curY, targetY, lerpFactor);
-                particle.curZ = THREE.MathUtils.lerp(particle.curZ, targetZ, lerpFactor);
-
-                // Update persistent
-                targetX = particle.curX;
-                targetY = particle.curY;
-                targetZ = particle.curZ;
 
             } else {
                 // No Audio: Lerp back to chaotic field
@@ -218,37 +220,53 @@ const Particles = ({ audioStream }) => {
                 // Reset colors to default gradient
                 const ratio = (Math.sin(i + time) + 1) / 2;
                 tempColor.lerpColors(baseColor1, baseColor2, ratio);
-                mesh.current.setColorAt(i, tempColor);
             }
 
-            dummy.position.set(targetX, targetY, targetZ);
+            // Lerp current to target for smoothness
+            const lerpFactor = 0.1;
+            particle.curX = THREE.MathUtils.lerp(particle.curX, targetX, lerpFactor);
+            particle.curY = THREE.MathUtils.lerp(particle.curY, targetY, lerpFactor);
+            particle.curZ = THREE.MathUtils.lerp(particle.curZ, targetZ, lerpFactor);
+
+            // Boost color for glow
+            tempColor.multiplyScalar(1.2);
+            mesh.current.setColorAt(i, tempColor);
+
+            dummy.position.set(particle.curX, particle.curY, particle.curZ);
 
             // Scale based on audio
-            const baseScale = 0.15;
-            // Diff layers get diff scales?
-            let scaleAdd = intensity * 0.8;
+            const baseScale = 0.3; // Increased base scale for glow sprites
+            let scaleAdd = intensity * 1.5;
             if (audioStream && i % 3 === 0) scaleAdd = 0; // Base ring stays small/stable
 
             dummy.scale.setScalar(baseScale + scaleAdd);
 
-            dummy.rotation.set(s * 5, s * 5, s * 5);
+            // Billboarding: Face camera
+            dummy.quaternion.copy(state.camera.quaternion);
             dummy.updateMatrix();
 
             mesh.current.setMatrixAt(i, dummy.matrix);
         });
 
         mesh.current.instanceMatrix.needsUpdate = true;
-        // Always update color since we are continuously animating it in audio mode
-        // and resetting it in silent mode
         mesh.current.instanceColor.needsUpdate = true;
     });
 
     return (
         <instancedMesh ref={mesh} args={[null, null, count]}>
-            <sphereGeometry args={[1, 16, 16]}>
+            <planeGeometry args={[1, 1]}>
                 <instancedBufferAttribute attach="attributes-color" args={[colorArray, 3]} />
-            </sphereGeometry>
-            <meshBasicMaterial vertexColors toneMapped={false} />
+            </planeGeometry>
+            <meshBasicMaterial
+                map={texture}
+                transparent
+                opacity={1}
+                blending={THREE.AdditiveBlending}
+                depthWrite={false}
+                vertexColors
+                toneMapped={false}
+                side={THREE.DoubleSide}
+            />
         </instancedMesh>
     );
 };
