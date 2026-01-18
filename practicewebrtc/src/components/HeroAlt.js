@@ -31,7 +31,7 @@ export const HeroAlt = ({ isActive, transcript, entityData, isAnalyzing, error, 
                             {isAnalyzing
                                 ? "Analyzing..."
                                 : inputMode === 'text'
-                                    ? <span className="flex items-center justify-center gap-1">{transcript}<span className="w-1 h-12 bg-white/70 animate-pulse inline-block ml-1"></span></span>
+                                    ? <span>{transcript}<span className="w-1 h-12 bg-white/70 animate-pulse inline-block ml-1 align-middle"></span></span>
                                     : (transcript || "Listening...")}
                         </h1>
                     )}
