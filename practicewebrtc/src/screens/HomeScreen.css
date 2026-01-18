@@ -1,14 +1,3 @@
-body {
-    background-color: rgb(158, 144, 237);
-    color: white;
-    padding: 40px;
-    font-family: Arial;
-    text-align: center;
-    font-size: 15px;
-    font-weight: bold;
-    direction: ltr;
-}
-
 form {
     margin: 10% auto 0 auto;
     padding: 40px;

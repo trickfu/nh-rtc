@@ -1,11 +1,11 @@
 import { Routes, Route } from "react-router-dom";
 import CallScreen from "./CallScreen";
-import HomeScreen from "./HomeScreen";
+import HomeAlt from "./HomeAlt";
 
 function RouteList() {
   return (
     <Routes>
-      <Route path="/" element={<HomeScreen />} />
+      <Route path="/" element={<HomeAlt />} />
       <Route path="/call/:username/:room" element={<CallScreen />} />
     </Routes>
   );

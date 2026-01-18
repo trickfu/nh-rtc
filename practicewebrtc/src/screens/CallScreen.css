@@ -1,24 +1,77 @@
-body {
-    background-color: rgb(158, 144, 237);
-    display: flex;
-    margin: 0;
+.call-screen-container {
+    width: 100vw;
+    height: 100vh;
+    background-color: #020202;
+    /* Or whatever background was intended */
     position: relative;
-    align-items: center;
-    justify-content: center;
-    padding: 0 50px;
+    overflow: hidden;
     font-family: Arial;
 }
 
-video {
-    max-width: calc(50% - 100px);
-    margin: 20px;
-    box-sizing: border-box;
-    border-radius: 2px;
-    padding: 0;
+.video-bubble {
+    width: 100%;
+    height: 100%;
+    /* Optional: nice shadow or border for the bubble */
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    border-radius: 20px;
+    background: #000;
+}
+
+/* Ensure video inside bubble fits nicely */
+.video-bubble video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 20px;
 }
 
 label {
-    margin: 20px;
     display: block;
     color: black;
+    margin-bottom: 5px;
+    background: rgba(255, 255, 255, 0.7);
+    padding: 2px 5px;
+    border-radius: 4px;
+}
+
+.control-bar-container {
+    position: absolute;
+    bottom: 30px;
+    left: 0;
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    z-index: 200;
+    pointer-events: none;
+}
+
+.control-bar {
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 10px 40px;
+    border-radius: 50px;
+    display: flex;
+    gap: 20px;
+    pointer-events: auto;
+}
+
+.end-call-btn {
+    background: #ff4444;
+    border: none;
+    border-radius: 50%;
+    width: 60px;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    cursor: pointer;
+    transition: transform 0.2s, background 0.2s;
+    outline: none;
+}
+
+.end-call-btn:hover {
+    transform: scale(1.1);
+    background: #cc0000;
 }

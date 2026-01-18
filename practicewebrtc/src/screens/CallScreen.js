@@ -1,6 +1,7 @@
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { useRef, useEffect } from "react";
 import socketio from "socket.io-client";
+import { Rnd } from "react-rnd";
 import "./CallScreen.css";
 
 function CallScreen() {
@@ -254,12 +255,87 @@ function CallScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [localUsername, roomName]);
 
+  const navigate = useNavigate();
+  const windowWidth = window.innerWidth;
+  const windowHeight = window.innerHeight;
+
+  // cleanup function to stop tracks
+  const stopTracks = () => {
+    if (localVideoRef.current && localVideoRef.current.srcObject) {
+      localVideoRef.current.srcObject.getTracks().forEach(track => track.stop());
+    }
+    if (pcRef.current) {
+      pcRef.current.close();
+    }
+  };
+
+  const handleEndCall = () => {
+    stopTracks();
+    navigate('/');
+    window.location.reload(); // Ensure clean state ensuring socket disconnect
+  };
+
   return (
-    <div>
-      <label>{"Username: " + localUsername}</label>
-      <label>{"Room Id: " + roomName}</label>
-      <video autoPlay muted playsInline ref={localVideoRef} />
-      <video autoPlay playsInline ref={remoteVideoRef} />
+    <div className="call-screen-container">
+      <div style={{ position: "absolute", top: 20, left: 20, zIndex: 100 }}>
+        {/* Optional: Hide labels or keep them based on preference. Keeping for debug for now but styled properly in CSS */}
+      </div>
+
+      {/* Remote Video - Large, Top Center */}
+      <Rnd
+        default={{
+          x: windowWidth * 0.05,
+          y: windowHeight * 0.05,
+          width: windowWidth * 0.9,
+          height: windowHeight * 0.75,
+        }}
+        bounds="parent"
+        style={{ zIndex: 10 }}
+        enableResizing={true}
+        disableDragging={false}
+      >
+        <div className="video-bubble remote-bubble">
+          <video
+            autoPlay
+            playsInline
+            ref={remoteVideoRef}
+            style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "20px" }}
+          />
+        </div>
+      </Rnd>
+
+      {/* Local Video - Bottom Left */}
+      <Rnd
+        default={{
+          x: 20, // 20px from left
+          y: windowHeight - 240, // Assuming height ~200px + padding
+          width: 200,
+          height: 200, // Square as per previous request, or adjustable
+        }}
+        bounds="parent"
+        style={{ zIndex: 11 }}
+      >
+        <div className="video-bubble local-bubble">
+          <video
+            autoPlay
+            muted
+            playsInline
+            ref={localVideoRef}
+            style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "20px" }}
+          />
+        </div>
+      </Rnd>
+
+      {/* Bottom Control Bar */}
+      <div className="control-bar-container">
+        <div className="control-bar">
+          <button className="end-call-btn" onClick={handleEndCall}>
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 3.75L18 6m0 0l2.25-2.25M18 6l2.25-2.25M18 6l-2.25 2.25m1.5 13.5c-8.284 0-15-6.716-15-15V4.5A2.25 2.25 0 014.5 2.25h1.372c.516 0 .966.351 1.091.852l1.106 4.423c.11.44-.054.902-.417 1.173l-1.293.97a1.062 1.062 0 00-.38 1.21 12.035 12.035 0 007.143 7.143c.441.162.928-.004 1.21-.38l.97-1.293a1.125 1.125 0 011.173-.417l4.423 1.106c.5.125.852.575.852 1.091V19.5a2.25 2.25 0 01-2.25 2.25h-2.25z" />
+            </svg>
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
