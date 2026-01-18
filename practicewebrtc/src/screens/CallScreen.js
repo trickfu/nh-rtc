@@ -10,6 +10,10 @@ function CallScreen() {
   const roomName = params.room;
   const localVideoRef = useRef(null);
   const remoteVideoRef = useRef(null);
+  const localBubbleRef = useRef(null);
+  const remoteBubbleRef = useRef(null);
+  const localAudioContextRef = useRef(null);
+  const remoteAudioContextRef = useRef(null);
   const pcRef = useRef(null); // Use ref to persist peer connection across renders
   const pendingCandidates = useRef([]); // Queue for ICE candidates that arrive early
   const socketRef = useRef(null);
@@ -61,6 +65,58 @@ function CallScreen() {
     }
   };
 
+  const setupAudioAnalysis = (stream, bubbleRef) => {
+    if (!stream || !stream.getAudioTracks().length) return null;
+
+    try {
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      // Clone stream to avoid interfering with playback/sending
+      const analysisStream = stream.clone();
+      const source = audioContext.createMediaStreamSource(analysisStream);
+      const analyser = audioContext.createAnalyser();
+      analyser.fftSize = 32;
+      source.connect(analyser);
+
+      const dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+      const updateVolume = () => {
+        if (audioContext.state === "closed") return;
+
+        analyser.getByteFrequencyData(dataArray);
+        let sum = 0;
+        for (let i = 0; i < dataArray.length; i++) {
+          sum += dataArray[i];
+        }
+        const average = sum / dataArray.length;
+
+        // Visual Effects
+        // Volume is 0-255. Normalize somewhat.
+        const intensity = average / 255;
+
+        if (bubbleRef.current) {
+          // Apply glow if audio is detected above noise floor
+          if (intensity > 0.05) {
+            const spread = 10 + (intensity * 40);
+            const alpha = 0.4 + (intensity * 0.6);
+            // Purple/Blue metaverse glow
+            bubbleRef.current.style.boxShadow = `0 0 ${spread}px ${intensity * 10}px rgba(138, 43, 226, ${alpha})`;
+            bubbleRef.current.style.border = `2px solid rgba(138, 43, 226, ${alpha})`;
+          } else {
+            // Default state
+            bubbleRef.current.style.boxShadow = '0 4px 15px rgba(0, 0, 0, 0.2)';
+            bubbleRef.current.style.border = '2px solid transparent';
+          }
+        }
+        requestAnimationFrame(updateVolume);
+      };
+      updateVolume();
+      return audioContext;
+    } catch (error) {
+      console.error("Audio analysis setup failed:", error);
+      return null;
+    }
+  };
+
   const onTrack = (event) => {
     console.log("onTrack fired!", event);
     console.log("Track kind:", event.track.kind);
@@ -69,6 +125,10 @@ function CallScreen() {
     if (remoteVideoRef.current && event.streams[0]) {
       console.log("Setting remote video srcObject");
       remoteVideoRef.current.srcObject = event.streams[0];
+
+      // Setup remote audio analysis
+      if (remoteAudioContextRef.current) remoteAudioContextRef.current.close();
+      remoteAudioContextRef.current = setupAudioAnalysis(event.streams[0], remoteBubbleRef);
     } else {
       console.warn("Could not set remote video - ref or stream missing");
     }
@@ -242,6 +302,8 @@ function CallScreen() {
           console.log("Local Stream found");
           localStream = stream;
           localVideo.srcObject = stream;
+          // Setup local audio analysis
+          localAudioContextRef.current = setupAudioAnalysis(stream, localBubbleRef);
           // Create peer connection early so tracks are ready before signaling
           createPeerConnection();
           socket.emit("join", { username: localUsername, room: roomName });
@@ -278,6 +340,8 @@ function CallScreen() {
       if (localStream) {
         localStream.getTracks().forEach(track => track.stop());
       }
+      if (localAudioContextRef.current) localAudioContextRef.current.close();
+      if (remoteAudioContextRef.current) remoteAudioContextRef.current.close();
       isConnectedRef.current = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -328,7 +392,7 @@ function CallScreen() {
         enableResizing={true}
         disableDragging={false}
       >
-        <div className="video-bubble remote-bubble">
+        <div className="video-bubble remote-bubble" ref={remoteBubbleRef} style={{ transition: "box-shadow 0.1s ease, border-color 0.1s ease", border: "2px solid transparent" }}>
           <video
             autoPlay
             playsInline
@@ -355,7 +419,7 @@ function CallScreen() {
         bounds="parent"
         style={{ zIndex: 11, transition: isResetting ? "all 0.5s ease" : "none" }}
       >
-        <div className="video-bubble local-bubble">
+        <div className="video-bubble local-bubble" ref={localBubbleRef} style={{ transition: "box-shadow 0.1s ease, border-color 0.1s ease", border: "2px solid transparent" }}>
           <video
             autoPlay
             muted
