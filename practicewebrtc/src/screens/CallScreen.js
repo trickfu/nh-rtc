@@ -1,5 +1,5 @@
 import { useParams, useNavigate } from "react-router-dom";
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useState } from "react";
 import socketio from "socket.io-client";
 import { Rnd } from "react-rnd";
 import "./CallScreen.css";
@@ -14,6 +14,34 @@ function CallScreen() {
   const pendingCandidates = useRef([]); // Queue for ICE candidates that arrive early
   const socketRef = useRef(null);
   const isConnectedRef = useRef(false); // Track if we've already connected
+
+  const getDefaultRemoteLayout = () => ({
+    x: window.innerWidth * 0.05,
+    y: window.innerHeight * 0.05,
+    width: window.innerWidth * 0.9,
+    height: window.innerHeight * 0.75,
+  });
+
+  const getDefaultLocalLayout = () => ({
+    x: 20,
+    y: window.innerHeight - 240,
+    width: 200,
+    height: 200,
+  });
+
+  const [remoteLayout, setRemoteLayout] = useState(getDefaultRemoteLayout());
+  const [localLayout, setLocalLayout] = useState(getDefaultLocalLayout());
+  const [isResetting, setIsResetting] = useState(false);
+
+  const resetLayout = () => {
+    setIsResetting(true);
+    setRemoteLayout(getDefaultRemoteLayout());
+    setLocalLayout(getDefaultLocalLayout());
+
+    setTimeout(() => {
+      setIsResetting(false);
+    }, 500);
+  };
 
   const sendData = (data) => {
     socketRef.current.emit("data", {
@@ -283,14 +311,20 @@ function CallScreen() {
 
       {/* Remote Video - Large, Top Center */}
       <Rnd
-        default={{
-          x: windowWidth * 0.05,
-          y: windowHeight * 0.05,
-          width: windowWidth * 0.9,
-          height: windowHeight * 0.75,
+        size={{ width: remoteLayout.width, height: remoteLayout.height }}
+        position={{ x: remoteLayout.x, y: remoteLayout.y }}
+        onDragStop={(e, d) => {
+          setRemoteLayout(prev => ({ ...prev, x: d.x, y: d.y }));
+        }}
+        onResizeStop={(e, direction, ref, delta, position) => {
+          setRemoteLayout({
+            width: parseInt(ref.style.width),
+            height: parseInt(ref.style.height),
+            ...position,
+          });
         }}
         bounds="parent"
-        style={{ zIndex: 10 }}
+        style={{ zIndex: 10, transition: isResetting ? "all 0.5s ease" : "none" }}
         enableResizing={true}
         disableDragging={false}
       >
@@ -306,14 +340,20 @@ function CallScreen() {
 
       {/* Local Video - Bottom Left */}
       <Rnd
-        default={{
-          x: 20, // 20px from left
-          y: windowHeight - 240, // Assuming height ~200px + padding
-          width: 200,
-          height: 200, // Square as per previous request, or adjustable
+        size={{ width: localLayout.width, height: localLayout.height }}
+        position={{ x: localLayout.x, y: localLayout.y }}
+        onDragStop={(e, d) => {
+          setLocalLayout(prev => ({ ...prev, x: d.x, y: d.y }));
+        }}
+        onResizeStop={(e, direction, ref, delta, position) => {
+          setLocalLayout({
+            width: parseInt(ref.style.width),
+            height: parseInt(ref.style.height),
+            ...position,
+          });
         }}
         bounds="parent"
-        style={{ zIndex: 11 }}
+        style={{ zIndex: 11, transition: isResetting ? "all 0.5s ease" : "none" }}
       >
         <div className="video-bubble local-bubble">
           <video
@@ -329,6 +369,11 @@ function CallScreen() {
       {/* Bottom Control Bar */}
       <div className="control-bar-container">
         <div className="control-bar">
+          <button className="reset-btn" onClick={resetLayout} title="Reset Layout">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+            </svg>
+          </button>
           <button className="end-call-btn" onClick={handleEndCall}>
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8">
               <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 3.75L18 6m0 0l2.25-2.25M18 6l2.25-2.25M18 6l-2.25 2.25m1.5 13.5c-8.284 0-15-6.716-15-15V4.5A2.25 2.25 0 014.5 2.25h1.372c.516 0 .966.351 1.091.852l1.106 4.423c.11.44-.054.902-.417 1.173l-1.293.97a1.062 1.062 0 00-.38 1.21 12.035 12.035 0 007.143 7.143c.441.162.928-.004 1.21-.38l.97-1.293a1.125 1.125 0 011.173-.417l4.423 1.106c.5.125.852.575.852 1.091V19.5a2.25 2.25 0 01-2.25 2.25h-2.25z" />

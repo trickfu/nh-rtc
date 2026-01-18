@@ -56,7 +56,7 @@ const Particles = ({ audioStream }) => {
             temp.push({
                 t, factor, speed, xFactor, yFactor, zFactor, mx: 0, my: 0,
                 isEmitting, emissionVelocity,
-                life: 0, vx: 0, vy: 0, vz: 0
+                life: 0, decayRate: 0.015, vx: 0, vy: 0, vz: 0
             });
         }
         return temp;
@@ -222,7 +222,7 @@ const Particles = ({ audioStream }) => {
                         particle.curX += particle.vx;
                         particle.curY += particle.vy;
                         particle.curZ += particle.vz;
-                        particle.life -= 0.015; // Slow decay
+                        particle.life -= particle.decayRate; // Variable decay
 
                         targetX = particle.curX;
                         targetY = particle.curY;
@@ -236,6 +236,7 @@ const Particles = ({ audioStream }) => {
                         // Reduced global multiplier from 0.8 to 0.6 to lower count slightly
                         if (intensity > 0.05 && Math.random() < intensity * 0.6) {
                             particle.life = 1.0;
+                            particle.decayRate = 0.01 + Math.random() * 0.03; // Randomize lifespan
 
                             // Randomly choose Source Ring (1 or 2)
                             const useRing1 = Math.random() > 0.5;
@@ -315,7 +316,9 @@ const Particles = ({ audioStream }) => {
             particle.curZ = THREE.MathUtils.lerp(particle.curZ, targetZ, lerpFactor);
 
             // Boost color for glow
-            tempColor.multiplyScalar(1.2);
+            // Brighter particles when active to match reference image
+            const boost = audioStream ? 3.0 : 1.2;
+            tempColor.multiplyScalar(boost);
             mesh.current.setColorAt(i, tempColor);
 
             dummy.position.set(particle.curX, particle.curY, particle.curZ);
@@ -379,7 +382,7 @@ export const BackgroundAlt = ({ audioStream }) => {
             <Canvas camera={{ position: [0, 0, 40], fov: 50 }} gl={{ alpha: true, antialias: true }}>
                 <Particles audioStream={audioStream} />
                 <EffectComposer>
-                    <Bloom luminanceThreshold={0.1} luminanceSmoothing={0.9} height={300} intensity={1.5} radius={0.8} />
+                    <Bloom luminanceThreshold={0.1} luminanceSmoothing={0.9} height={300} intensity={2.0} radius={0.8} />
                 </EffectComposer>
             </Canvas>
         </div>
