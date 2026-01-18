@@ -3,7 +3,7 @@ import { Canvas, useFrame } from '@react-three/fiber';
 import { EffectComposer, Bloom } from '@react-three/postprocessing';
 import * as THREE from 'three';
 
-const Particles = ({ audioStream }) => {
+const Particles = ({ audioStream, inputMode }) => {
     const count = 1500;
     const mesh = useRef();
     const dummy = useMemo(() => new THREE.Object3D(), []);
@@ -106,8 +106,18 @@ const Particles = ({ audioStream }) => {
             audioValue = sum / dataArray.current.length;
         }
 
-        const intensity = audioValue / 255;
         const time = state.clock.getElapsedTime();
+        let intensity = 0;
+
+        if (audioStream) {
+            intensity = audioValue / 255;
+        } else if (inputMode === 'text') {
+            // Simulated gentle breathing for text mode
+            // Sine wave from 0.05 to 0.25
+            intensity = 0.15 + Math.sin(time * 3) * 0.1;
+        }
+
+        const active = !!audioStream || inputMode === 'text';
 
         // Color definitions
         const tempColor = new THREE.Color();
@@ -149,7 +159,7 @@ const Particles = ({ audioStream }) => {
                 particle.curX = targetX; particle.curY = targetY; particle.curZ = targetZ;
             }
 
-            if (audioStream) {
+            if (active) {
                 // Audio Active Logic
 
                 // Define 4 Layers
@@ -317,7 +327,7 @@ const Particles = ({ audioStream }) => {
 
             // Boost color for glow
             // Brighter particles when active to match reference image
-            const boost = audioStream ? 3.0 : 1.2;
+            const boost = active ? 3.0 : 1.2;
             tempColor.multiplyScalar(boost);
             mesh.current.setColorAt(i, tempColor);
 
@@ -327,7 +337,7 @@ const Particles = ({ audioStream }) => {
             const baseScale = 0.3; // Increased base scale for glow sprites
             let scaleAdd = intensity * 1.5;
 
-            if (audioStream) {
+            if (active) {
                 if (i % 4 === 0) scaleAdd = 0; // Base ring stays small/stable
                 if (i % 4 === 3) {
                     // Emitter scale logic
@@ -342,7 +352,7 @@ const Particles = ({ audioStream }) => {
             }
 
             let finalScale = baseScale + scaleAdd;
-            if (audioStream && i % 4 === 3 && particle.life <= 0) finalScale = 0;
+            if (active && i % 4 === 3 && particle.life <= 0) finalScale = 0;
 
             dummy.scale.setScalar(finalScale);
 
@@ -376,11 +386,11 @@ const Particles = ({ audioStream }) => {
     );
 };
 
-export const BackgroundAlt = ({ audioStream }) => {
+export const BackgroundAlt = ({ audioStream, inputMode }) => {
     return (
         <div className="w-full h-full bg-black/0"> {/* Transparent background */}
             <Canvas camera={{ position: [0, 0, 40], fov: 50 }} gl={{ alpha: true, antialias: true }}>
-                <Particles audioStream={audioStream} />
+                <Particles audioStream={audioStream} inputMode={inputMode} />
                 <EffectComposer>
                     <Bloom luminanceThreshold={0.1} luminanceSmoothing={0.9} height={300} intensity={2.0} radius={0.8} />
                 </EffectComposer>

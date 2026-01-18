@@ -11,6 +11,7 @@ const HomeAlt = () => {
     const [entityData, setEntityData] = useState(null);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [error, setError] = useState(null);
+    const [inputMode, setInputMode] = useState(null); // 'voice', 'text', or null
 
     // Refs to avoid closure staleness issues in callbacks
     const recognitionRef = useRef(null);
@@ -26,7 +27,67 @@ const HomeAlt = () => {
         } else {
             console.log("API Key found.");
         }
-    }, []);
+
+        const handleKeyDown = (e) => {
+            if (e.key === 'Escape') {
+                stopEverything();
+                setTranscript('');
+                transcriptRef.current = '';
+                setInputMode(null);
+                setError(null);
+                setEntityData(null);
+                return;
+            }
+
+            // Should not type if:
+            // 1. Analyzing
+            // 2. Microphone is active (voice mode)
+            // 3. Error state
+            // 4. Entity data is showing
+            if (isAnalyzing || audioStreamRef.current || error || entityData) return;
+
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                if (transcriptRef.current.trim()) {
+                    performAnalysis(transcriptRef.current);
+                }
+                return;
+            }
+
+            // Backspace handling moved inside explicit typing check or separate block if needed based on inputMode
+            // For now, if we are in text mode (which is determined by state), Backspace works.
+            // But here we are in the block where specific states return early.
+
+            // Re-implementing Backspace/Typing logic to be cleaner with the new Escape priority
+
+            if (e.key === 'Backspace') {
+                setInputMode('text');
+                setTranscript(prev => {
+                    const next = prev.slice(0, -1);
+                    transcriptRef.current = next;
+                    if (next === '') setInputMode(null); // Return to idle if empty
+                    return next;
+                });
+                return;
+            }
+
+            // Regular typing (allow letters, numbers, punctuation, space)
+            if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+                // Determine if we should start text mode
+                if (!audioStreamRef.current && !entityData && !error) {
+                    setInputMode('text');
+                    setTranscript(prev => {
+                        const next = prev + e.key;
+                        transcriptRef.current = next;
+                        return next;
+                    });
+                }
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [isAnalyzing, error, entityData]); // Dependencies for the effect closure
 
     const stopEverything = () => {
         if (recognitionRef.current) {
@@ -78,6 +139,7 @@ const HomeAlt = () => {
         transcriptRef.current = '';
 
         try {
+            setInputMode('voice');
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             setAudioStream(stream); // Update state
             audioStreamRef.current = stream; // Update ref
@@ -166,8 +228,8 @@ const HomeAlt = () => {
 
     return (
         <div
-            className={`relative w-full h-screen overflow-hidden bg-[#020202] flex flex-col ${!audioStream && !entityData && !isAnalyzing && !error ? 'cursor-pointer' : ''}`}
-            onClick={!audioStream && !entityData && !isAnalyzing && !error ? handleAudioAccess : undefined}
+            className={`relative w-full h-screen overflow-hidden bg-[#020202] flex flex-col ${!audioStream && !entityData && !isAnalyzing && !error && inputMode !== 'text' ? 'cursor-pointer' : ''}`}
+            onClick={!audioStream && !entityData && !isAnalyzing && !error && inputMode !== 'text' ? handleAudioAccess : undefined}
         >
             {/* Debug Navigation Button */}
             <div className="absolute top-6 right-6 z-50 pointer-events-auto">
@@ -184,36 +246,53 @@ const HomeAlt = () => {
 
             <div className="absolute inset-0 z-0">
                 <Suspense fallback={<div className="w-full h-full bg-black flex items-center justify-center text-white">Initializing Engine...</div>}>
-                    <BackgroundAlt audioStream={audioStream} />
+                    <BackgroundAlt audioStream={audioStream} inputMode={inputMode} />
                 </Suspense>
             </div>
 
             <div className="relative z-10 w-full h-full flex flex-col items-center justify-center pointer-events-none">
                 <main className="pointer-events-auto">
-                    <HeroAlt isActive={!!audioStream || !!entityData || isAnalyzing || !!error} transcript={transcript} entityData={entityData} isAnalyzing={isAnalyzing} error={error} />
+                    <HeroAlt
+                        isActive={!!audioStream || !!entityData || isAnalyzing || !!error || inputMode === 'text'}
+                        transcript={transcript}
+                        entityData={entityData}
+                        isAnalyzing={isAnalyzing}
+                        error={error}
+                        inputMode={inputMode}
+                    />
                 </main>
             </div>
 
             {/* Click to Speak Overlay */}
-            {!audioStream && !entityData && !isAnalyzing && !error && (
-                <div className="absolute bottom-12 left-0 w-full flex justify-center z-20 pointer-events-auto">
-                    <button
-                        className="text-sm tracking-[0.3em] uppercase transition-all duration-500 text-white/70 animate-fade-in-out cursor-pointer hover:text-white"
-                    >
+            {!audioStream && !entityData && !isAnalyzing && !error && inputMode !== 'text' && (
+                <div className="absolute bottom-12 left-0 w-full flex justify-center items-center z-20 pointer-events-auto h-6 group cursor-pointer">
+                    <span className="absolute text-sm tracking-[0.3em] uppercase transition-colors duration-500 text-white/70 group-hover:text-white animate-text-cycle-1">
                         Click to Speak
-                    </button>
+                    </span>
+                    <span className="absolute text-sm tracking-[0.3em] uppercase transition-colors duration-500 text-white/70 group-hover:text-white animate-text-cycle-2">
+                        Start Typing
+                    </span>
                 </div>
             )}
 
             <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_center,transparent_0%,rgba(0,0,0,0.6)_100%)]"></div>
 
             <style>{`
-                @keyframes fadeInOut {
-                    0%, 100% { opacity: 0.3; }
-                    50% { opacity: 1; }
+                @keyframes textCycle1 {
+                    0%, 45% { opacity: 1; filter: blur(0px); }
+                    55%, 95% { opacity: 0; filter: blur(4px); }
+                    100% { opacity: 1; filter: blur(0px); }
                 }
-                .animate-fade-in-out {
-                    animation: fadeInOut 3s infinite ease-in-out;
+                @keyframes textCycle2 {
+                    0%, 45% { opacity: 0; filter: blur(4px); }
+                    55%, 95% { opacity: 1; filter: blur(0px); }
+                    100% { opacity: 0; filter: blur(4px); }
+                }
+                .animate-text-cycle-1 {
+                    animation: textCycle1 6s infinite ease-in-out;
+                }
+                .animate-text-cycle-2 {
+                    animation: textCycle2 6s infinite ease-in-out;
                 }
             `}</style>
         </div>

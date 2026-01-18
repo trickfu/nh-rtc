@@ -1,6 +1,6 @@
 import React from 'react';
 
-export const HeroAlt = ({ isActive, transcript, entityData, isAnalyzing, error }) => {
+export const HeroAlt = ({ isActive, transcript, entityData, isAnalyzing, error, inputMode }) => {
     return (
         <div className="flex flex-col items-center text-center space-y-6 animate-[fadeIn_2s_ease-out] w-full max-w-4xl px-4">
             {isActive ? (
@@ -28,7 +28,11 @@ export const HeroAlt = ({ isActive, transcript, entityData, isAnalyzing, error }
                         </div>
                     ) : (
                         <h1 className={`text-4xl md:text-6xl font-light tracking-[0.1em] uppercase select-none vapor-text drop-shadow-[0_0_30px_rgba(168,85,247,0.5)] text-white break-words w-full transition-all duration-300 ${isAnalyzing ? 'animate-pulse opacity-70' : ''}`}>
-                            {isAnalyzing ? "Analyzing..." : (transcript || "Listening...")}
+                            {isAnalyzing
+                                ? "Analyzing..."
+                                : inputMode === 'text'
+                                    ? <span className="flex items-center justify-center gap-1">{transcript}<span className="w-1 h-12 bg-white/70 animate-pulse inline-block ml-1"></span></span>
+                                    : (transcript || "Listening...")}
                         </h1>
                     )}
                 </div>
